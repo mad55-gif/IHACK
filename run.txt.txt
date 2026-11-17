@@ -1,0 +1,115 @@
+import requests
+from bs4 import BeautifulSoup
+import time
+import ipaddress
+
+# Configuration
+START_IP = "10.80.1.2"
+END_IP = "10.80.30.2"
+EXCLUDED_IP = "10.80.15.2"
+PORT = "8490"
+OUTPUT_FILE = "flag.txt"
+
+# Authentication details (Extracted from image)
+OPERATOR = "gennai"
+PASSPHRASE = "YOUR_PASSPHRASE_HERE" # You need to put the actual passphrase here
+
+def extract_notes_from_ip(ip):
+    """Connects to a specific IP, logs in, and extracts the top 3 notes."""
+    url = f"http://{ip}:{PORT}/vault"
+    
+    # Use a session to maintain cookies/login state
+    session = requests.Session()
+    
+    try:
+        # 1. Initial GET request to load the page (and potentially get CSRF tokens if needed)
+        response = session.get(url, timeout=5)
+        response.raise_for_status()
+        
+        # 2. Assuming a standard form submission for login. 
+        # You may need to inspect the network tab in your browser to find the exact endpoint.
+        # If the app uses AJAX/Fetch, you might need to post to an API endpoint like /api/login
+        login_data = {
+            "operator": OPERATOR,
+            "passphrase": PASSPHRASE
+            # Add CSRF token here if the app requires it (e.g., "csrf_token": "...")
+        }
+        
+        # Note: The actual login endpoint might be different. Adjust as necessary.
+        session.post(url, data=login_data, timeout=5)
+        
+        # 3. Load the biometric notes (This is likely an API call triggered by the button)
+        # If the button makes a request to e.g. /api/notes, use session.get(api_url)
+        # For this example, we assume the notes are loaded on the main page after login.
+        notes_response = session.get(url, timeout=5)
+        notes_response.raise_for_status()
+        
+        soup = BeautifulSoup(notes_response.text, 'html.parser')
+        
+        # Find the table (Adjust the selector based on the actual HTML structure)
+        # This is a generic selector; you will likely need to inspect the HTML to find the specific table ID or class.
+        table = soup.find('table') 
+        if not table:
+            print(f"[{ip}] Could not find notes table.")
+            return []
+
+        extracted_notes = []
+        rows = table.find_all('tr')[1:] # Skip header row
+        
+        for row in rows:
+            cols = row.find_all('td')
+            if len(cols) >= 4:
+                # The NOTE column is the 4th column (index 3)
+                note_text = cols[3].text.strip()
+                
+                # Filter out generic notes if necessary (e.g., "routine note")
+                if note_text and "routine note" not in note_text.lower():
+                    extracted_notes.append(note_text)
+                    
+                # Stop after gathering the top 3
+                if len(extracted_notes) >= 3:
+                    break
+                    
+        return extracted_notes
+
+    except requests.exceptions.RequestException as e:
+        print(f"[{ip}] Error connecting: {e}")
+        return []
+
+def main():
+    # Generate the IP range
+    start_int = int(ipaddress.IPv4Address(START_IP))
+    end_int = int(ipaddress.IPv4Address(END_IP))
+    
+    while True:
+        print(f"--- Starting scan cycle at {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
+        
+        with open(OUTPUT_FILE, 'a') as f: # Use 'w' to overwrite, 'a' to append
+            f.write(f"--- Scan started at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            
+            for ip_int in range(start_int, end_int + 1):
+                current_ip = str(ipaddress.IPv4Address(ip_int))
+                
+                # Skip excluded IP
+                if current_ip == EXCLUDED_IP:
+                    print(f"[{current_ip}] Skipping excluded IP.")
+                    continue
+                    
+                print(f"[{current_ip}] Attempting to extract notes...")
+                notes = extract_notes_from_ip(current_ip)
+                
+                if notes:
+                    print(f"  -> Found {len(notes)} notes.")
+                    f.write(f"IP: {current_ip}\n")
+                    for i, note in enumerate(notes, 1):
+                        f.write(f"  Note {i}: {note}\n")
+                else:
+                    print(f"  -> No valid notes found or access denied.")
+                    
+        print(f"--- Scan cycle complete. Sleeping for 7 minutes ---\n")
+        
+        # Sleep for 7 minutes (420 seconds) before the next run
+        time.sleep(420)
+
+if __name__ == "__main__":
+    main()
