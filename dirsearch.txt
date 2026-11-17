@@ -1,0 +1,16 @@
+dirsearch -u http://138.201.185.107:20004/
+
+  _|. _ _  _  _  _ _|_    v0.4.4                                                                                                                                                                                                           
+ (_||| _) (/_(_|| (_| )                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                           
+Extensions: php, asp, aspx, jsp, html, htm | HTTP method: GET | Threads: 25 | Wordlist size: 12295
+
+Target: http://138.201.185.107:20004/
+
+[16:03:17] Scanning:                                                                                                                                                                                                                       
+[16:04:37] 200 -   13KB - /app.js                                           
+[16:04:47] 401 -    27B - /board                                            
+[16:05:23] 200 -    43B - /health                                           
+[16:05:28] 200 -    9KB - /index.html                                       
+                                                                             
+Task Completed   
